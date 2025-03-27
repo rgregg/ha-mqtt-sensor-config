@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "Web UI to edit MQTT sensors defined in an MQTT broker for Home Assistant",
   "dependencies": {
     "body-parser": "^2.2.0",

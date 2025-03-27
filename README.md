@@ -9,14 +9,46 @@ A web application to configure and manage MQTT sensors for Home Assistant.
 - View and edit sensor configurations
 - Update or delete sensors directly from the UI
 
-## Installation
+## Docker Setup
+
+This application can be run using Docker:
+
+### Using Docker Compose (recommended)
+
+1. Clone this repository
+2. Start the application and optional MQTT broker:
+   ```bash
+   docker-compose up -d
+   ```
+3. Access the web interface at http://localhost:3000
+
+The docker-compose setup includes:
+- The main application on port 3000
+- An optional Mosquitto MQTT broker on port 1883
+
+### Using Docker without Compose
+
+1. Build the Docker image:
+   ```bash
+   docker build -t mqtt-sensor-config .
+   ```
+
+2. Run the container:
+   ```bash
+   docker run -p 3000:3000 -d mqtt-sensor-config
+   ```
+
+3. Access the web interface at http://localhost:3000
+
+## Standard Installation
+
+If you prefer to run the application without Docker:
 
 1. Clone this repository
 2. Install dependencies:
-
-```bash
-npm install
-```
+   ```bash
+   npm install
+   ```
 
 ## Usage
 
@@ -50,4 +82,4 @@ The application will be available at http://localhost:3000.
 
 ## License
 
-ISC
+MIT
