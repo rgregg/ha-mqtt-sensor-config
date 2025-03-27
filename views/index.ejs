@@ -35,9 +35,14 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
         <h5>Discovered Sensors</h5>
-        <button class="btn btn-sm btn-outline-primary" id="refresh-btn">
-          <i class="bi bi-arrow-clockwise"></i> Refresh
-        </button>
+        <div>
+          <button class="btn btn-sm btn-success" id="new-sensor-btn">
+            <i class="bi bi-plus-circle"></i> New Sensor
+          </button>
+          <button class="btn btn-sm btn-outline-primary ms-2" id="refresh-btn">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+          </button>
+        </div>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -88,6 +93,59 @@
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
             <button type="button" class="btn btn-danger" id="delete-sensor-btn">Delete</button>
             <button type="button" class="btn btn-primary" id="save-sensor-btn">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- New Sensor Modal -->
+    <div class="modal fade" id="new-sensor-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Create New Sensor</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="new-sensor-form">
+              <div class="row mb-3">
+                <div class="col-md-6">
+                  <label for="new-sensor-type" class="form-label">Device Type</label>
+                  <select class="form-select" id="new-sensor-type">
+                    <option value="sensor">sensor</option>
+                    <option value="binary_sensor">binary_sensor</option>
+                    <option value="switch">switch</option>
+                    <option value="light">light</option>
+                    <option value="climate">climate</option>
+                    <option value="cover">cover</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label for="new-sensor-id" class="form-label">Device ID</label>
+                  <input type="text" class="form-control" id="new-sensor-id" placeholder="unique_identifier">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label for="new-sensor-name" class="form-label">Sensor Name</label>
+                <input type="text" class="form-control" id="new-sensor-name">
+              </div>
+              <div class="mb-3">
+                <label for="new-sensor-state-topic" class="form-label">State Topic</label>
+                <input type="text" class="form-control" id="new-sensor-state-topic" placeholder="home/sensors/your_sensor">
+              </div>
+              <div class="mb-3">
+                <label for="new-sensor-config-json" class="form-label">Additional Configuration (JSON)</label>
+                <textarea class="form-control" id="new-sensor-config-json" rows="10" placeholder='{
+  "device_class": "temperature",
+  "unit_of_measurement": "°C",
+  "value_template": "{{ value_json.temperature }}"
+}'></textarea>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-success" id="create-sensor-btn">Create Sensor</button>
           </div>
         </div>
       </div>

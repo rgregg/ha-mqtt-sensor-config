@@ -21,6 +21,7 @@ function connectMQTT(url) {
     console.log('Connected to MQTT broker');
     // Subscribe to Home Assistant discovery topics
     client.subscribe('homeassistant/+/+/config');
+    client.subscribe('homeassistant/+/+/+/config');
   });
   
   client.on('error', (err) => {
@@ -44,19 +45,28 @@ const discoveredSensors = {};
 function setupMessageHandler() {
   if (client) {
     client.on('message', (topic, message) => {
+      console.log('Received message:', topic, message.toString());
       if (topic.includes('homeassistant') && topic.includes('/config')) {
         try {
           const config = JSON.parse(message.toString());
           const topicParts = topic.split('/');
-          const deviceType = topicParts[1]; // sensor, binary_sensor, etc.
-          const deviceId = topicParts[2];   // unique_id part
+          var deviceType, deviceId, sensorName;
+          if (topicParts.length == 4) {
+            deviceType = topicParts[1]; // sensor, binary_sensor, etc.
+            deviceId = topicParts[2];   // unique_id part
+          } else if (topicParts.length == 5) {
+            deviceType = topicParts[1]; // sensor, binary_sensor, etc.
+            deviceId = topicParts[2];   // unique_id part
+            sensorName = topicParts[3]; // name part
+          }
           
           discoveredSensors[`${deviceType}_${deviceId}`] = {
             id: `${deviceType}_${deviceId}`,
             deviceType,
             deviceId,
             config,
-            topic
+            topic,
+            sensorName
           };
         } catch (err) {
           console.error('Error parsing sensor config:', err);
@@ -90,6 +100,52 @@ router.post('/connect', (req, res) => {
 // Get all discovered sensors
 router.get('/', (req, res) => {
   res.json(Object.values(discoveredSensors));
+});
+
+// Create new sensor
+router.post('/', (req, res) => {
+  if (!mqttConnected) {
+    return res.status(400).json({ error: 'Not connected to MQTT broker' });
+  }
+  
+  try {
+    const { deviceType, deviceId, config } = req.body;
+    
+    if (!deviceType || !deviceId || !config) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Ensure required fields exist in config
+    if (!config.name || !config.state_topic) {
+      return res.status(400).json({ error: 'Config must include name and state_topic' });
+    }
+    
+    // Create a unique ID for the sensor if not provided
+    if (!config.unique_id) {
+      config.unique_id = deviceId;
+    }
+    
+    // Create discovery topic for this sensor
+    const topic = `homeassistant/${deviceType}/${deviceId}/config`;
+    
+    // Publish config to MQTT broker
+    client.publish(topic, JSON.stringify(config));
+    
+    // Add to local cache
+    const id = `${deviceType}_${deviceId}`;
+    const sensor = {
+      id,
+      deviceType,
+      deviceId,
+      config,
+      topic
+    };
+    discoveredSensors[id] = sensor;
+    
+    res.status(201).json({ success: true, sensor });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create sensor', details: err.message });
+  }
 });
 
 // Get specific sensor by ID

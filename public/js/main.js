@@ -3,7 +3,10 @@ const brokerUrlInput = document.getElementById('broker-url');
 const connectBtn = document.getElementById('connect-btn');
 const connectionStatus = document.getElementById('connection-status');
 const refreshBtn = document.getElementById('refresh-btn');
+const newSensorBtn = document.getElementById('new-sensor-btn');
 const sensorsTableBody = document.getElementById('sensors-table-body');
+
+// Edit Modal Elements
 const editSensorModal = new bootstrap.Modal(document.getElementById('edit-sensor-modal'));
 const sensorIdInput = document.getElementById('sensor-id');
 const sensorNameInput = document.getElementById('sensor-name');
@@ -12,14 +15,25 @@ const sensorConfigJsonInput = document.getElementById('sensor-config-json');
 const saveSensorBtn = document.getElementById('save-sensor-btn');
 const deleteSensorBtn = document.getElementById('delete-sensor-btn');
 
+// New Sensor Modal Elements
+const newSensorModal = new bootstrap.Modal(document.getElementById('new-sensor-modal'));
+const newSensorTypeSelect = document.getElementById('new-sensor-type');
+const newSensorIdInput = document.getElementById('new-sensor-id');
+const newSensorNameInput = document.getElementById('new-sensor-name');
+const newSensorStateTopicInput = document.getElementById('new-sensor-state-topic');
+const newSensorConfigJsonInput = document.getElementById('new-sensor-config-json');
+const createSensorBtn = document.getElementById('create-sensor-btn');
+
 // Check connection status on page load
 checkConnectionStatus();
 
 // Event Listeners
 connectBtn.addEventListener('click', connectToBroker);
 refreshBtn.addEventListener('click', loadSensors);
+newSensorBtn.addEventListener('click', openNewSensorModal);
 saveSensorBtn.addEventListener('click', saveSensor);
 deleteSensorBtn.addEventListener('click', deleteSensor);
+createSensorBtn.addEventListener('click', createSensor);
 
 // Functions
 async function checkConnectionStatus() {
@@ -214,5 +228,76 @@ async function deleteSensor() {
   } catch (err) {
     console.error('Error deleting sensor:', err);
     alert('Error deleting sensor. Check console for details.');
+  }
+}
+
+function openNewSensorModal() {
+  // Clear form
+  newSensorTypeSelect.value = 'sensor';
+  newSensorIdInput.value = '';
+  newSensorNameInput.value = '';
+  newSensorStateTopicInput.value = '';
+  newSensorConfigJsonInput.value = '';
+  
+  // Show modal
+  newSensorModal.show();
+}
+
+async function createSensor() {
+  // Validate input
+  const deviceType = newSensorTypeSelect.value;
+  const deviceId = newSensorIdInput.value.trim();
+  const name = newSensorNameInput.value.trim();
+  const stateTopic = newSensorStateTopicInput.value.trim();
+  
+  if (!deviceId || !name || !stateTopic) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  try {
+    // Parse additional config if provided
+    let additionalConfig = {};
+    if (newSensorConfigJsonInput.value.trim()) {
+      try {
+        additionalConfig = JSON.parse(newSensorConfigJsonInput.value);
+      } catch (err) {
+        alert('Invalid JSON format in additional configuration. Please check your input.');
+        return;
+      }
+    }
+    
+    // Create full config object
+    const config = {
+      name,
+      state_topic: stateTopic,
+      unique_id: deviceId,
+      ...additionalConfig
+    };
+    
+    // Create sensor
+    const response = await fetch('/sensors', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        deviceType,
+        deviceId,
+        config
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      newSensorModal.hide();
+      loadSensors(); // Refresh sensors list
+    } else {
+      alert(`Failed to create sensor: ${data.error}`);
+    }
+  } catch (err) {
+    console.error('Error creating sensor:', err);
+    alert('Error creating sensor. Check console for details.');
   }
 }
