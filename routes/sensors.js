@@ -48,9 +48,15 @@ function setupMessageHandler() {
       console.log('Received message:', topic, message.toString());
       if (topic.includes('homeassistant') && topic.includes('/config')) {
         try {
+          if (message.toString().trim() === '') {
+            console.log('Empty config received (delete operation), ignoring');
+            return;
+          }
+          
           const config = JSON.parse(message.toString());
           const topicParts = topic.split('/');
           var deviceType, deviceId, sensorName;
+          
           if (topicParts.length == 4) {
             deviceType = topicParts[1]; // sensor, binary_sensor, etc.
             deviceId = topicParts[2];   // unique_id part
@@ -60,14 +66,19 @@ function setupMessageHandler() {
             sensorName = topicParts[3]; // name part
           }
           
-          discoveredSensors[`${deviceType}_${deviceId}`] = {
-            id: `${deviceType}_${deviceId}`,
+          const sensorId = `${deviceType}_${deviceId}`;
+          console.log(`Adding/updating sensor ${sensorId} to discoveredSensors`);
+          
+          discoveredSensors[sensorId] = {
+            id: sensorId,
             deviceType,
             deviceId,
             config,
             topic,
             sensorName
           };
+          
+          console.log('Current discovered sensors:', Object.keys(discoveredSensors));
         } catch (err) {
           console.error('Error parsing sensor config:', err);
         }
@@ -161,18 +172,26 @@ router.get('/:id', (req, res) => {
 
 // Update sensor configuration
 router.put('/:id', (req, res) => {
+  console.log('PUT request received for sensor ID:', req.params.id);
+  console.log('Request body:', req.body);
+  
   const sensor = discoveredSensors[req.params.id];
   
   if (!sensor) {
+    console.log('Sensor not found in discoveredSensors');
+    console.log('Available sensors:', Object.keys(discoveredSensors));
     return res.status(404).json({ error: 'Sensor not found' });
   }
   
   if (!mqttConnected) {
+    console.log('Not connected to MQTT broker');
     return res.status(400).json({ error: 'Not connected to MQTT broker' });
   }
   
   try {
     const updatedConfig = req.body.config;
+    console.log('Updated config:', updatedConfig);
+    console.log('Publishing to topic:', sensor.topic);
     
     // Publish updated config
     client.publish(sensor.topic, JSON.stringify(updatedConfig));
@@ -180,8 +199,10 @@ router.put('/:id', (req, res) => {
     // Update local cache
     sensor.config = updatedConfig;
     
+    console.log('Sensor updated successfully');
     res.json({ success: true, sensor });
   } catch (err) {
+    console.error('Error updating sensor:', err);
     res.status(500).json({ error: 'Failed to update sensor', details: err.message });
   }
 });

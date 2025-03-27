@@ -215,15 +215,22 @@ async function loadSensors() {
 }
 
 async function openEditModal(sensorId) {
+  console.log('Opening edit modal for sensor ID:', sensorId);
+  
   try {
     const response = await fetch(`/sensors/${sensorId}`);
+    console.log('Fetch response status:', response.status);
+    
     const sensor = await response.json();
+    console.log('Received sensor data:', sensor);
     
     // Populate form fields
     sensorIdInput.value = sensor.id;
     sensorNameInput.value = sensor.config.name || '';
     sensorStateTopicInput.value = sensor.config.state_topic || '';
     sensorConfigJsonInput.value = JSON.stringify(sensor.config, null, 2);
+    
+    console.log('Populated form with sensor ID:', sensorIdInput.value);
     
     // Show modal
     editSensorModal.show();
@@ -235,13 +242,16 @@ async function openEditModal(sensorId) {
 
 async function saveSensor() {
   const sensorId = sensorIdInput.value;
+  console.log('Saving sensor with ID:', sensorId);
   
   try {
     // Parse the JSON to validate it
     let configJson;
     try {
       configJson = JSON.parse(sensorConfigJsonInput.value);
+      console.log('Parsed config JSON:', configJson);
     } catch (err) {
+      console.error('JSON parse error:', err);
       alert('Invalid JSON format. Please check your configuration.');
       return;
     }
@@ -249,6 +259,9 @@ async function saveSensor() {
     // Update name and state topic from form fields
     configJson.name = sensorNameInput.value;
     configJson.state_topic = sensorStateTopicInput.value;
+    
+    console.log('Sending PUT request to:', `/sensors/${sensorId}`);
+    console.log('With data:', { config: configJson });
     
     const response = await fetch(`/sensors/${sensorId}`, {
       method: 'PUT',
@@ -258,7 +271,9 @@ async function saveSensor() {
       body: JSON.stringify({ config: configJson })
     });
     
+    console.log('Response status:', response.status);
     const data = await response.json();
+    console.log('Response data:', data);
     
     if (data.success) {
       editSensorModal.hide();
