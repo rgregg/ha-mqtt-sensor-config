@@ -21,6 +21,24 @@ const sensorConfigJsonInput = document.getElementById('sensor-config-json');
 const saveSensorBtn = document.getElementById('save-sensor-btn');
 const deleteSensorBtn = document.getElementById('delete-sensor-btn');
 
+// Duplicate Modal Elements
+const dupTopicFormatSelect = document.getElementById('dup-topic-format');
+const dupDeviceTypeSelect = document.getElementById('dup-device-type');
+const dupDeviceIdInput = document.getElementById('dup-device-id');
+const dupSensorNamePartInput = document.getElementById('dup-sensor-name-part');
+const dupSensorNameInput = document.getElementById('dup-display-name');
+const dupStateTopicInput = document.getElementById('dup-state-topic');
+const dupConfigJsonInput = document.getElementById('dup-config-json');
+const dupDeviceTypeGroup = document.querySelector('.dup-device-type-group');
+const dupSensorNameGroup = document.querySelector('.dup-sensor-name-group');
+const createDuplicateBtn = document.getElementById('create-duplicate-btn');
+
+// Tab and mode elements
+const editTab = document.getElementById('edit-tab');
+const duplicateTab = document.getElementById('duplicate-tab');
+const editModeButtons = document.getElementById('edit-mode-buttons');
+const duplicateModeButtons = document.getElementById('duplicate-mode-buttons');
+
 // New Sensor Modal Elements
 const newSensorModal = new bootstrap.Modal(document.getElementById('new-sensor-modal'));
 const newTopicFormatSelect = document.getElementById('new-topic-format');
@@ -136,6 +154,71 @@ function updateTopicFormatUI() {
   }
 }
 
+// Function to update duplicate form UI based on topic format
+function updateDupTopicFormatUI() {
+  const format = dupTopicFormatSelect.value;
+  
+  // Show/hide fields based on selected format
+  switch(format) {
+    case 'standard':
+      dupDeviceTypeGroup.style.display = 'block';
+      dupSensorNameGroup.style.display = 'none';
+      break;
+    case 'standard_with_name':
+      dupDeviceTypeGroup.style.display = 'block';
+      dupSensorNameGroup.style.display = 'block';
+      break;
+    case 'unique_id':
+      dupDeviceTypeGroup.style.display = 'none';
+      dupSensorNameGroup.style.display = 'none';
+      break;
+    case 'unique_id_with_name':
+      dupDeviceTypeGroup.style.display = 'none';
+      dupSensorNameGroup.style.display = 'block';
+      break;
+  }
+}
+
+// Function to initialize duplicate form from the current sensor
+function initDuplicateForm() {
+  // Copy config from edit form
+  let config;
+  try {
+    config = JSON.parse(sensorConfigJsonInput.value);
+  } catch (err) {
+    console.error('JSON parse error:', err);
+    alert('Invalid JSON in the original sensor. Please fix it before duplicating.');
+    return;
+  }
+  
+  // Set initial values from current sensor
+  dupDeviceTypeSelect.value = sensorDeviceTypeInput.value;
+  dupDeviceIdInput.value = sensorDeviceIdInput.value + '_copy';
+  dupSensorNamePartInput.value = sensorNamePartInput.value ? sensorNamePartInput.value + '_copy' : '';
+  dupSensorNameInput.value = sensorNameInput.value + ' (Copy)';
+  dupStateTopicInput.value = sensorStateTopicInput.value.replace(/\/[^\/]+$/, '/copy');
+  dupConfigJsonInput.value = JSON.stringify({
+    ...config,
+    name: dupSensorNameInput.value,
+    state_topic: dupStateTopicInput.value
+  }, null, 2);
+  
+  // Update UI based on the format
+  updateDupTopicFormatUI();
+}
+
+// Tab change handlers
+function showEditMode() {
+  editModeButtons.style.display = 'block';
+  duplicateModeButtons.style.display = 'none';
+}
+
+function showDuplicateMode() {
+  editModeButtons.style.display = 'none';
+  duplicateModeButtons.style.display = 'block';
+  initDuplicateForm();
+}
+
 // Event Listeners
 connectBtn.addEventListener('click', connectToBroker);
 clearBrokerBtn.addEventListener('click', clearBrokerUrl);
@@ -144,7 +227,13 @@ newSensorBtn.addEventListener('click', openNewSensorModal);
 saveSensorBtn.addEventListener('click', saveSensor);
 deleteSensorBtn.addEventListener('click', deleteSensor);
 createSensorBtn.addEventListener('click', createSensor);
+createDuplicateBtn.addEventListener('click', createDuplicateSensor);
 newTopicFormatSelect.addEventListener('change', updateTopicFormatUI);
+dupTopicFormatSelect.addEventListener('change', updateDupTopicFormatUI);
+
+// Tab event listeners
+editTab.addEventListener('click', showEditMode);
+duplicateTab.addEventListener('click', showDuplicateMode);
 
 // Functions
 async function checkConnectionStatus() {
@@ -646,5 +735,91 @@ async function createSensor() {
   } catch (err) {
     console.error('Error creating sensor:', err);
     alert('Error creating sensor. Check console for details.');
+  }
+}
+
+async function createDuplicateSensor() {
+  // Get the topic format
+  const topicFormat = dupTopicFormatSelect.value;
+  
+  // Get common required fields
+  const deviceId = dupDeviceIdInput.value.trim();
+  const displayName = dupSensorNameInput.value.trim();
+  const stateTopic = dupStateTopicInput.value.trim();
+  
+  // Get format-specific fields
+  const deviceType = (topicFormat === 'standard' || topicFormat === 'standard_with_name') 
+    ? dupDeviceTypeSelect.value 
+    : null;
+    
+  const sensorName = (topicFormat === 'standard_with_name' || topicFormat === 'unique_id_with_name') 
+    ? dupSensorNamePartInput.value.trim() 
+    : null;
+  
+  // Validate common required fields
+  if (!deviceId || !displayName || !stateTopic) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  // Validate format-specific fields
+  if ((topicFormat === 'standard' || topicFormat === 'standard_with_name') && !deviceType) {
+    alert('Device Type is required for standard format');
+    return;
+  }
+  
+  if ((topicFormat === 'standard_with_name' || topicFormat === 'unique_id_with_name') && !sensorName) {
+    alert('Sensor Name Part is required for formats with sensor name');
+    return;
+  }
+  
+  try {
+    // Parse the config JSON
+    let config;
+    try {
+      config = JSON.parse(dupConfigJsonInput.value);
+    } catch (err) {
+      alert('Invalid JSON format in configuration. Please check your input.');
+      return;
+    }
+    
+    // Make sure core fields are set correctly
+    config.name = displayName;
+    config.state_topic = stateTopic;
+    config.unique_id = deviceId;
+    
+    // Create duplicated sensor
+    const response = await fetch('/sensors', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        deviceType,
+        deviceId,
+        sensorName,
+        config,
+        topicFormat
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      editSensorModal.hide();
+      await loadSensors(); // Refresh sensors list
+      
+      // Make the new duplicated sensor show at the top
+      currentSortColumn = 'id';
+      currentSortDirection = 'asc';
+      displaySensors();
+      
+      alert('Sensor duplicated successfully!');
+    } else {
+      alert(`Failed to duplicate sensor: ${data.error}`);
+    }
+  } catch (err) {
+    console.error('Error duplicating sensor:', err);
+    alert('Error duplicating sensor. Check console for details.');
   }
 }

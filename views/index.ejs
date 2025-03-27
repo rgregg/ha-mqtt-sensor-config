@@ -77,9 +77,21 @@
             <h5 class="modal-title">Edit Sensor</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
+          <div class="modal-header bg-light border-bottom-0 pb-0">
+            <ul class="nav nav-tabs card-header-tabs">
+              <li class="nav-item">
+                <button class="nav-link active" id="edit-tab" data-bs-toggle="tab" data-bs-target="#edit-content" type="button">Edit</button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" id="duplicate-tab" data-bs-toggle="tab" data-bs-target="#duplicate-content" type="button">Duplicate</button>
+              </li>
+            </ul>
+          </div>
           <div class="modal-body">
-            <form id="edit-sensor-form">
-              <input type="hidden" id="sensor-id">
+            <div class="tab-content">
+              <div class="tab-pane fade show active" id="edit-content">
+                <form id="edit-sensor-form">
+                  <input type="hidden" id="sensor-id">
               
               <div class="mb-3">
                 <label class="form-label">MQTT Topic</label>
@@ -119,12 +131,83 @@
                 <label for="sensor-config-json" class="form-label">Configuration JSON</label>
                 <textarea class="form-control" id="sensor-config-json" rows="10"></textarea>
               </div>
-            </form>
+                </form>
+              </div>
+              
+              <div class="tab-pane fade" id="duplicate-content">
+                <form id="duplicate-sensor-form">
+                  <div class="alert alert-info">
+                    Create a copy of this sensor with a new ID and topic
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label for="dup-topic-format" class="form-label">Topic Format</label>
+                    <select class="form-select" id="dup-topic-format">
+                      <option value="standard">Standard: homeassistant/{device_type}/{device_id}/config</option>
+                      <option value="standard_with_name">Standard with name: homeassistant/{device_type}/{device_id}/{sensor_name}/config</option>
+                      <option value="unique_id">Simple: homeassistant/{unique_id}/config</option>
+                      <option value="unique_id_with_name">With name: homeassistant/{unique_id}/{sensor_name}/config</option>
+                    </select>
+                  </div>
+                  
+                  <div class="row mb-3">
+                    <div class="col-md-6 dup-device-type-group">
+                      <label for="dup-device-type" class="form-label">Device Type</label>
+                      <select class="form-select" id="dup-device-type">
+                        <option value="sensor">sensor</option>
+                        <option value="binary_sensor">binary_sensor</option>
+                        <option value="switch">switch</option>
+                        <option value="light">light</option>
+                        <option value="climate">climate</option>
+                        <option value="cover">cover</option>
+                        <option value="custom">custom</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="dup-device-id" class="form-label">Device/Unique ID</label>
+                      <input type="text" class="form-control" id="dup-device-id" placeholder="new_unique_identifier">
+                    </div>
+                  </div>
+                  
+                  <div class="mb-3 dup-sensor-name-group">
+                    <label for="dup-sensor-name-part" class="form-label">Sensor Name Part</label>
+                    <input type="text" class="form-control" id="dup-sensor-name-part" placeholder="sensor_name_in_topic">
+                    <small class="form-text text-muted">This is the name part used in the MQTT topic path</small>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label for="dup-display-name" class="form-label">Display Name</label>
+                    <input type="text" class="form-control" id="dup-display-name">
+                    <small class="form-text text-muted">The name that will be shown in Home Assistant</small>
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label for="dup-state-topic" class="form-label">State Topic</label>
+                    <input type="text" class="form-control" id="dup-state-topic">
+                  </div>
+                  
+                  <div class="mb-3">
+                    <label for="dup-config-json" class="form-label">Configuration JSON</label>
+                    <textarea class="form-control" id="dup-config-json" rows="10"></textarea>
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
+          
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-danger" id="delete-sensor-btn">Delete</button>
-            <button type="button" class="btn btn-primary" id="save-sensor-btn">Save Changes</button>
+            
+            <!-- Edit mode buttons -->
+            <div id="edit-mode-buttons">
+              <button type="button" class="btn btn-danger" id="delete-sensor-btn">Delete</button>
+              <button type="button" class="btn btn-primary" id="save-sensor-btn">Save Changes</button>
+            </div>
+            
+            <!-- Duplicate mode button -->
+            <div id="duplicate-mode-buttons" style="display:none;">
+              <button type="button" class="btn btn-success" id="create-duplicate-btn">Create Duplicate</button>
+            </div>
           </div>
         </div>
       </div>
