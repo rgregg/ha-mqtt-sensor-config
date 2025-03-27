@@ -9,42 +9,108 @@ body {
   padding: 6px 0;
 }
 
-/* Table styles */
-.table th {
-  background-color: #f1f1f1;
-  position: relative;
+/* Device accordion styles */
+.accordion-button:not(.collapsed) {
+  background-color: #e7f1ff;
+  color: #0c63e4;
+  font-weight: 500;
 }
 
-.sortable {
-  cursor: pointer;
-  user-select: none;
+.accordion-button:focus {
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
-.sortable:hover {
-  background-color: #e5e5e5;
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
-.sort-icon {
-  font-size: 0.8rem;
-  opacity: 0.5;
-  margin-left: 5px;
+.device-info {
+  display: flex;
+  flex-direction: column;
 }
 
-.sort-asc .sort-icon {
+.device-id {
+  font-weight: 500;
+  font-size: 1.1rem;
+}
+
+.device-type {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.device-actions {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.accordion-button:hover .device-actions {
+  visibility: visible;
   opacity: 1;
-  transform: rotate(180deg);
 }
 
-.sort-desc .sort-icon {
-  opacity: 1;
-  transform: rotate(0deg);
+/* Sensor list styles */
+.sensor-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
-.actions-column {
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-  text-align: center;
+.sensor-item {
+  padding: 12px 15px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sensor-item:last-child {
+  border-bottom: none;
+}
+
+.sensor-item:hover {
+  background-color: #f8f9fa;
+}
+
+.sensor-details {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.sensor-name {
+  font-weight: 500;
+  margin-bottom: 3px;
+}
+
+.sensor-meta {
+  display: flex;
+  gap: 15px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.sensor-actions {
+  display: flex;
+  gap: 5px;
+}
+
+/* Search box styles */
+.search-box {
+  max-width: 500px;
+}
+
+.search-box .input-group-text {
+  background-color: #fff;
+  border-right: none;
+}
+
+.search-box .form-control {
+  border-left: none;
 }
 
 /* Button styles */

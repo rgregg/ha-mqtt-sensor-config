@@ -5,7 +5,9 @@ const clearBrokerBtn = document.getElementById('clear-broker-btn');
 const connectionStatus = document.getElementById('connection-status');
 const refreshBtn = document.getElementById('refresh-btn');
 const newSensorBtn = document.getElementById('new-sensor-btn');
-const sensorsTableBody = document.getElementById('sensors-table-body');
+const devicesAccordion = document.getElementById('devices-accordion');
+const deviceSearch = document.getElementById('device-search');
+const noDevicesMessage = document.getElementById('no-devices-message');
 
 // Edit Modal Elements
 const editSensorModal = new bootstrap.Modal(document.getElementById('edit-sensor-modal'));
@@ -39,11 +41,17 @@ const duplicateTab = document.getElementById('duplicate-tab');
 const editModeButtons = document.getElementById('edit-mode-buttons');
 const duplicateModeButtons = document.getElementById('duplicate-mode-buttons');
 
-// New Sensor Modal Elements
+// New Device Modal Elements
+const newDeviceModal = new bootstrap.Modal(document.getElementById('new-device-modal'));
+const deviceIdInput = document.getElementById('device-id');
+const deviceTypeSelect = document.getElementById('device-type');
+const createDeviceBtn = document.getElementById('create-device-btn');
+
+// Add Sensor Modal Elements
 const newSensorModal = new bootstrap.Modal(document.getElementById('new-sensor-modal'));
+const newDeviceIdInput = document.getElementById('new-device-id');
 const newTopicFormatSelect = document.getElementById('new-topic-format');
 const newSensorTypeSelect = document.getElementById('new-sensor-type');
-const newSensorIdInput = document.getElementById('new-sensor-id');
 const newSensorNamePartInput = document.getElementById('new-sensor-name-part');
 const newSensorNameInput = document.getElementById('new-sensor-name');
 const newSensorStateTopicInput = document.getElementById('new-sensor-state-topic');
@@ -223,12 +231,14 @@ function showDuplicateMode() {
 connectBtn.addEventListener('click', connectToBroker);
 clearBrokerBtn.addEventListener('click', clearBrokerUrl);
 refreshBtn.addEventListener('click', loadSensors);
-newSensorBtn.addEventListener('click', openNewSensorModal);
+newSensorBtn.addEventListener('click', openNewDeviceModal);
 saveSensorBtn.addEventListener('click', saveSensor);
 deleteSensorBtn.addEventListener('click', deleteSensor);
 createSensorBtn.addEventListener('click', createSensor);
 createDuplicateBtn.addEventListener('click', createDuplicateSensor);
+createDeviceBtn.addEventListener('click', createDevice);
 newTopicFormatSelect.addEventListener('change', updateTopicFormatUI);
+deviceSearch.addEventListener('input', filterDevices);
 dupTopicFormatSelect.addEventListener('change', updateDupTopicFormatUI);
 
 // Tab event listeners
@@ -317,78 +327,62 @@ function updateConnectionStatus(connected) {
   }
 }
 
-// Global variable to store all sensors for sorting
+// Global variables for sensors and devices
 let allSensors = [];
-let currentSortColumn = 'id';
-let currentSortDirection = 'asc';
+let deviceMap = {}; // Maps device IDs to arrays of sensors
 
 async function loadSensors() {
   try {
     const response = await fetch('/sensors');
     allSensors = await response.json();
     
-    displaySensors();
+    // Organize sensors by device ID
+    deviceMap = {};
+    
+    allSensors.forEach(sensor => {
+      const deviceId = sensor.deviceId;
+      
+      if (!deviceMap[deviceId]) {
+        deviceMap[deviceId] = {
+          deviceId: deviceId,
+          deviceType: sensor.deviceType,
+          sensors: []
+        };
+      }
+      
+      deviceMap[deviceId].sensors.push(sensor);
+    });
+    
+    displayDevices();
   } catch (err) {
     console.error('Error loading sensors:', err);
-    sensorsTableBody.innerHTML = `
-      <tr>
-        <td colspan="5" class="text-center text-danger">Error loading sensors. Check console for details.</td>
-      </tr>
+    devicesAccordion.innerHTML = `
+      <div class="alert alert-danger">
+        Error loading sensors. Check console for details.
+      </div>
     `;
   }
 }
 
-function displaySensors() {
-  sensorsTableBody.innerHTML = '';
+function displayDevices() {
+  devicesAccordion.innerHTML = '';
   
-  if (allSensors.length === 0) {
-    sensorsTableBody.innerHTML = `
-      <tr>
-        <td colspan="5" class="text-center">No sensors discovered yet</td>
-      </tr>
-    `;
+  const deviceIds = Object.keys(deviceMap);
+  
+  if (deviceIds.length === 0) {
+    noDevicesMessage.style.display = 'block';
     return;
   }
   
-  // Sort the sensors based on current sort settings
-  sortSensors();
+  noDevicesMessage.style.display = 'none';
   
-  allSensors.forEach(sensor => {
-    const row = document.createElement('tr');
-    
-    // Extract topic format information
-    const topicParts = sensor.topic.split('/');
-    let topicFormat = 'Unknown';
-    
-    if (topicParts.length === 4 && topicParts[3] === 'config') {
-      topicFormat = 'Standard';
-    } else if (topicParts.length === 5 && topicParts[4] === 'config') {
-      topicFormat = 'With Name';
-    } else if (topicParts.length === 3 && topicParts[2] === 'config') {
-      topicFormat = 'Direct';
-    }
-    
-    // Create a tooltip with full topic
-    const tooltipAttr = `data-bs-toggle="tooltip" data-bs-placement="top" title="${sensor.topic}"`;
-    
-    row.innerHTML = `
-      <td class="text-center">
-        <button class="btn btn-sm btn-primary btn-action edit-btn" data-id="${sensor.id}">
-          <i class="bi bi-pencil"></i> Edit
-        </button>
-      </td>
-      <td>${sensor.deviceId || 'N/A'}</td>
-      <td>${sensor.config.name || 'Unnamed'}</td>
-      <td>${sensor.deviceType || 'custom'}</td>
-      <td ${tooltipAttr}>${sensor.config.state_topic || 'N/A'}</td>
-    `;
-    
-    sensorsTableBody.appendChild(row);
-  });
+  // Sort device IDs alphabetically
+  deviceIds.sort();
   
-  // Add event listeners to edit buttons
-  document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => openEditModal(btn.dataset.id));
+  deviceIds.forEach((deviceId, index) => {
+    const device = deviceMap[deviceId];
+    const deviceHtml = createDeviceAccordionItem(device, index);
+    devicesAccordion.innerHTML += deviceHtml;
   });
   
   // Initialize tooltips
@@ -397,59 +391,239 @@ function displaySensors() {
     return new bootstrap.Tooltip(tooltipTriggerEl);
   });
   
-  // Update column header styling
-  updateSortIndicators();
+  // Add event listeners to buttons
+  attachEventListeners();
 }
 
-function sortSensors() {
-  allSensors.sort((a, b) => {
-    let valA, valB;
-    
-    switch (currentSortColumn) {
-      case 'id':
-        valA = a.deviceId;
-        valB = b.deviceId;
-        break;
-      case 'name':
-        valA = a.config.name || '';
-        valB = b.config.name || '';
-        break;
-      case 'type':
-        valA = a.deviceType;
-        valB = b.deviceType;
-        break;
-      case 'topic':
-        valA = a.config.state_topic || '';
-        valB = b.config.state_topic || '';
-        break;
-      default:
-        valA = a.deviceId;
-        valB = b.deviceId;
-    }
-    
-    // Case-insensitive string comparison
-    valA = valA.toString().toLowerCase();
-    valB = valB.toString().toLowerCase();
-    
-    if (currentSortDirection === 'asc') {
-      return valA.localeCompare(valB);
-    } else {
-      return valB.localeCompare(valA);
-    }
-  });
+function createDeviceAccordionItem(device, index) {
+  const deviceId = device.deviceId;
+  const deviceType = device.deviceType || 'custom';
+  const sensors = device.sensors || [];
+  const sensorCount = sensors.length;
+  
+  // Create device header
+  const html = `
+    <div class="accordion-item">
+      <h2 class="accordion-header">
+        <button class="accordion-button ${index > 0 ? 'collapsed' : ''}" type="button" data-bs-toggle="collapse" 
+                data-bs-target="#device-${deviceId.replace(/[^a-zA-Z0-9]/g, '_')}" aria-expanded="${index === 0 ? 'true' : 'false'}">
+          <div class="device-header">
+            <div class="device-info">
+              <span class="device-id">${deviceId}</span>
+              <span class="device-type">Type: ${deviceType} · ${sensorCount} sensor${sensorCount !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="device-actions">
+              <button class="btn btn-sm btn-outline-primary add-sensor-btn" data-device-id="${deviceId}" data-device-type="${deviceType}">
+                <i class="bi bi-plus-circle"></i> Add Sensor
+              </button>
+            </div>
+          </div>
+        </button>
+      </h2>
+      <div id="device-${deviceId.replace(/[^a-zA-Z0-9]/g, '_')}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}">
+        <div class="accordion-body p-0">
+          ${createSensorList(sensors, deviceId)}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return html;
 }
 
-function updateSortIndicators() {
-  // Reset all headers
-  document.querySelectorAll('th.sortable').forEach(th => {
-    th.classList.remove('sort-asc', 'sort-desc');
+function createSensorList(sensors, deviceId) {
+  if (!sensors || sensors.length === 0) {
+    return `
+      <div class="p-3 text-center text-muted">
+        No sensors for this device. 
+        <button class="btn btn-sm btn-link add-sensor-btn" data-device-id="${deviceId}">Add a sensor</button>
+      </div>
+    `;
+  }
+  
+  // Sort sensors by name
+  sensors.sort((a, b) => {
+    const nameA = (a.config.name || 'Unnamed').toLowerCase();
+    const nameB = (b.config.name || 'Unnamed').toLowerCase();
+    return nameA.localeCompare(nameB);
   });
   
-  // Set current sort header
-  const currentHeader = document.querySelector(`th[data-sort="${currentSortColumn}"]`);
-  if (currentHeader) {
-    currentHeader.classList.add(currentSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
+  let html = '<ul class="sensor-list">';
+  
+  sensors.forEach(sensor => {
+    // Determine sensor type from topic parts or config
+    let sensorType = sensor.deviceType || 'custom';
+    if (sensor.config.device_class) {
+      sensorType = sensor.config.device_class;
+    }
+    
+    // Create a tooltip with full topic
+    const tooltipAttr = `data-bs-toggle="tooltip" data-bs-placement="top" title="${sensor.topic}"`;
+    
+    html += `
+      <li class="sensor-item">
+        <div class="sensor-details">
+          <div class="sensor-name">${sensor.config.name || 'Unnamed'}</div>
+          <div class="sensor-meta">
+            <span class="sensor-type">${sensorType}</span>
+            <span class="sensor-topic" ${tooltipAttr}>${sensor.config.state_topic || 'No state topic'}</span>
+          </div>
+        </div>
+        <div class="sensor-actions">
+          <button class="btn btn-sm btn-primary edit-btn" data-id="${sensor.id}">
+            <i class="bi bi-pencil"></i> Edit
+          </button>
+          <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${sensor.id}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </li>
+    `;
+  });
+  
+  html += '</ul>';
+  return html;
+}
+
+function attachEventListeners() {
+  // Add sensor button event listeners
+  document.querySelectorAll('.add-sensor-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent accordion toggle
+      openAddSensorModal(btn.dataset.deviceId, btn.dataset.deviceType);
+    });
+  });
+  
+  // Edit sensor button event listeners
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditModal(btn.dataset.id));
+  });
+  
+  // Delete sensor button event listeners
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to delete this sensor?')) {
+        deleteSensor(btn.dataset.id);
+      }
+    });
+  });
+}
+
+function filterDevices() {
+  const searchText = deviceSearch.value.toLowerCase();
+  
+  if (!searchText) {
+    // If search is empty, show all devices
+    document.querySelectorAll('.accordion-item').forEach(item => {
+      item.style.display = 'block';
+    });
+    return;
   }
+  
+  // Iterate through all devices
+  document.querySelectorAll('.accordion-item').forEach(item => {
+    const deviceId = item.querySelector('.device-id').textContent.toLowerCase();
+    const deviceType = item.querySelector('.device-type').textContent.toLowerCase();
+    
+    // Get all sensors in this device
+    const sensorItems = item.querySelectorAll('.sensor-item');
+    let deviceMatches = deviceId.includes(searchText) || deviceType.includes(searchText);
+    let anySensorMatches = false;
+    
+    // Check if any sensor matches
+    sensorItems.forEach(sensorItem => {
+      const sensorName = sensorItem.querySelector('.sensor-name').textContent.toLowerCase();
+      const sensorType = sensorItem.querySelector('.sensor-type').textContent.toLowerCase();
+      const sensorTopic = sensorItem.querySelector('.sensor-topic').textContent.toLowerCase();
+      
+      const sensorMatches = sensorName.includes(searchText) || 
+                           sensorType.includes(searchText) || 
+                           sensorTopic.includes(searchText);
+      
+      if (sensorMatches) {
+        anySensorMatches = true;
+        sensorItem.style.display = 'flex';
+      } else {
+        sensorItem.style.display = 'none';
+      }
+    });
+    
+    // Show device if either device matches or any sensor matches
+    if (deviceMatches || anySensorMatches) {
+      item.style.display = 'block';
+      
+      // If any sensor matches, expand the accordion
+      if (anySensorMatches) {
+        const collapseEl = item.querySelector('.accordion-collapse');
+        const bsCollapse = new bootstrap.Collapse(collapseEl, { toggle: false });
+        bsCollapse.show();
+      }
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+
+function openNewDeviceModal() {
+  // Clear form
+  deviceIdInput.value = '';
+  deviceTypeSelect.value = 'sensor';
+  
+  // Show modal
+  newDeviceModal.show();
+}
+
+function openAddSensorModal(deviceId, deviceType) {
+  // Set the device ID
+  newDeviceIdInput.value = deviceId;
+  
+  // Set appropriate default values
+  newTopicFormatSelect.value = 'standard';
+  newSensorTypeSelect.value = deviceType || 'sensor';
+  newSensorNamePartInput.value = '';
+  newSensorNameInput.value = '';
+  newSensorStateTopicInput.value = 'homeassistant/' + deviceId + '/state';
+  newSensorConfigJsonInput.value = '';
+  
+  // Update UI based on selected format
+  updateTopicFormatUI();
+  
+  // Show modal
+  newSensorModal.show();
+}
+
+async function createDevice() {
+  const deviceId = deviceIdInput.value.trim();
+  const deviceType = deviceTypeSelect.value;
+  
+  if (!deviceId) {
+    alert('Please enter a device ID');
+    return;
+  }
+  
+  // Check if device already exists
+  if (deviceMap[deviceId]) {
+    alert('A device with this ID already exists');
+    return;
+  }
+  
+  // Create the device in our local map
+  deviceMap[deviceId] = {
+    deviceId: deviceId,
+    deviceType: deviceType,
+    sensors: []
+  };
+  
+  // Hide modal
+  newDeviceModal.hide();
+  
+  // Update UI
+  displayDevices();
+  
+  // Open the add sensor modal for this device
+  setTimeout(() => {
+    openAddSensorModal(deviceId, deviceType);
+  }, 500);
 }
 
 async function openEditModal(sensorId) {
@@ -651,7 +825,7 @@ async function createSensor() {
   const topicFormat = newTopicFormatSelect.value;
   
   // Get common required fields
-  const deviceId = newSensorIdInput.value.trim();
+  const deviceId = newDeviceIdInput.value.trim();
   const displayName = newSensorNameInput.value.trim();
   const stateTopic = newSensorStateTopicInput.value.trim();
   
@@ -697,7 +871,7 @@ async function createSensor() {
     const config = {
       name: displayName,
       state_topic: stateTopic,
-      unique_id: deviceId,
+      unique_id: deviceId + (sensorName ? '_' + sensorName : ''),
       ...additionalConfig
     };
     
@@ -720,15 +894,29 @@ async function createSensor() {
     
     if (data.success) {
       newSensorModal.hide();
-      await loadSensors(); // Refresh sensors list
       
-      // If the new sensor was successfully created, make it show at the top
-      // by sorting by ID and setting ascending order
-      currentSortColumn = 'id';
-      currentSortDirection = 'asc';
-      displaySensors();
+      // Add the new sensor to our device map
+      if (!deviceMap[deviceId]) {
+        deviceMap[deviceId] = {
+          deviceId: deviceId,
+          deviceType: deviceType || 'custom',
+          sensors: []
+        };
+      }
       
-      alert('Sensor created successfully!');
+      deviceMap[deviceId].sensors.push(data.sensor);
+      
+      // Update the UI
+      displayDevices();
+      
+      // Find and expand the device that contains the new sensor
+      const deviceElement = document.querySelector(`#device-${deviceId.replace(/[^a-zA-Z0-9]/g, '_')}`);
+      if (deviceElement) {
+        const bsCollapse = new bootstrap.Collapse(deviceElement, { toggle: false });
+        bsCollapse.show();
+      }
+      
+      alert('Sensor added successfully!');
     } else {
       alert(`Failed to create sensor: ${data.error}`);
     }
