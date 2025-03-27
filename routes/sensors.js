@@ -14,14 +14,34 @@ function connectMQTT(url) {
   }
   
   brokerUrl = url;
-  client = mqtt.connect(url);
+  console.log('Connecting to MQTT broker:', url);
+  client = mqtt.connect(url, {
+    keepalive: 60,
+    reconnectPeriod: 5000,
+    clean: true,
+    clientId: `mqtt-sensor-config-${Math.random().toString(16).substring(2, 8)}`
+  });
   
   client.on('connect', () => {
     mqttConnected = true;
     console.log('Connected to MQTT broker');
+    
     // Subscribe to Home Assistant discovery topics
-    client.subscribe('homeassistant/+/+/config');
-    client.subscribe('homeassistant/+/+/+/config');
+    client.subscribe('homeassistant/+/+/config', { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Error subscribing to topics:', err);
+      } else {
+        console.log('Subscribed to homeassistant/+/+/config');
+      }
+    });
+    
+    client.subscribe('homeassistant/+/+/+/config', { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Error subscribing to topics:', err);
+      } else {
+        console.log('Subscribed to homeassistant/+/+/+/config');
+      }
+    });
   });
   
   client.on('error', (err) => {
@@ -32,6 +52,15 @@ function connectMQTT(url) {
   client.on('close', () => {
     mqttConnected = false;
     console.log('MQTT connection closed');
+  });
+  
+  client.on('reconnect', () => {
+    console.log('Attempting to reconnect to MQTT broker');
+  });
+  
+  client.on('offline', () => {
+    mqttConnected = false;
+    console.log('MQTT client is offline');
   });
   
   // Setup message handler
@@ -139,8 +168,14 @@ router.post('/', (req, res) => {
     // Create discovery topic for this sensor
     const topic = `homeassistant/${deviceType}/${deviceId}/config`;
     
-    // Publish config to MQTT broker
-    client.publish(topic, JSON.stringify(config));
+    // Publish config to MQTT broker with QoS 1 to ensure delivery
+    client.publish(topic, JSON.stringify(config), { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Error publishing to MQTT:', err);
+      } else {
+        console.log('Successfully published to MQTT with QoS 1');
+      }
+    });
     
     // Add to local cache
     const id = `${deviceType}_${deviceId}`;
@@ -193,8 +228,14 @@ router.put('/:id', (req, res) => {
     console.log('Updated config:', updatedConfig);
     console.log('Publishing to topic:', sensor.topic);
     
-    // Publish updated config
-    client.publish(sensor.topic, JSON.stringify(updatedConfig));
+    // Publish updated config with QoS 1 to ensure delivery
+    client.publish(sensor.topic, JSON.stringify(updatedConfig), { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Error publishing to MQTT:', err);
+      } else {
+        console.log('Successfully published to MQTT with QoS 1');
+      }
+    });
     
     // Update local cache
     sensor.config = updatedConfig;
@@ -220,8 +261,14 @@ router.delete('/:id', (req, res) => {
   }
   
   try {
-    // Publish empty config to remove sensor
-    client.publish(sensor.topic, '');
+    // Publish empty config to remove sensor with QoS 1
+    client.publish(sensor.topic, '', { qos: 1 }, (err) => {
+      if (err) {
+        console.error('Error publishing delete to MQTT:', err);
+      } else {
+        console.log('Successfully published delete to MQTT with QoS 1');
+      }
+    });
     
     // Remove from local cache
     delete discoveredSensors[req.params.id];

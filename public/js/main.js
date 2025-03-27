@@ -221,8 +221,22 @@ async function openEditModal(sensorId) {
     const response = await fetch(`/sensors/${sensorId}`);
     console.log('Fetch response status:', response.status);
     
+    if (!response.ok) {
+      if (response.status === 404) {
+        alert('Sensor not found. It may have been deleted or the server was restarted. Try refreshing the page.');
+        loadSensors(); // Refresh the list to show current state
+        return;
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
     const sensor = await response.json();
     console.log('Received sensor data:', sensor);
+    
+    if (!sensor || !sensor.config) {
+      alert('Invalid sensor data received. Try refreshing the page.');
+      return;
+    }
     
     // Populate form fields
     sensorIdInput.value = sensor.id;
@@ -244,6 +258,11 @@ async function saveSensor() {
   const sensorId = sensorIdInput.value;
   console.log('Saving sensor with ID:', sensorId);
   
+  if (!sensorId) {
+    alert('Missing sensor ID. Please try refreshing the page and try again.');
+    return;
+  }
+  
   try {
     // Parse the JSON to validate it
     let configJson;
@@ -256,9 +275,29 @@ async function saveSensor() {
       return;
     }
     
+    // Basic validation
+    if (!sensorNameInput.value.trim()) {
+      alert('Sensor name cannot be empty');
+      return;
+    }
+    
+    if (!sensorStateTopicInput.value.trim()) {
+      alert('State topic cannot be empty');
+      return;
+    }
+    
     // Update name and state topic from form fields
-    configJson.name = sensorNameInput.value;
-    configJson.state_topic = sensorStateTopicInput.value;
+    configJson.name = sensorNameInput.value.trim();
+    configJson.state_topic = sensorStateTopicInput.value.trim();
+    
+    // Ensure unique_id is preserved
+    if (!configJson.unique_id) {
+      // Extract device ID from sensor ID (format is deviceType_deviceId)
+      const deviceId = sensorId.split('_')[1];
+      if (deviceId) {
+        configJson.unique_id = deviceId;
+      }
+    }
     
     console.log('Sending PUT request to:', `/sensors/${sensorId}`);
     console.log('With data:', { config: configJson });
@@ -272,18 +311,34 @@ async function saveSensor() {
     });
     
     console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        alert('Sensor not found. It may have been deleted or the server was restarted. Try refreshing the page.');
+        editSensorModal.hide();
+        loadSensors(); // Refresh the list
+        return;
+      } else if (response.status === 400) {
+        alert('Not connected to MQTT broker. Please connect first.');
+        return;
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    }
+    
     const data = await response.json();
     console.log('Response data:', data);
     
     if (data.success) {
       editSensorModal.hide();
       loadSensors(); // Refresh sensors list
+      alert('Sensor updated successfully!');
     } else {
       alert(`Failed to update sensor: ${data.error}`);
     }
   } catch (err) {
     console.error('Error saving sensor:', err);
-    alert('Error saving sensor. Check console for details.');
+    alert('Error saving sensor: ' + err.message);
   }
 }
 
