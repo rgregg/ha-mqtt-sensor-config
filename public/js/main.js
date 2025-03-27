@@ -1,6 +1,7 @@
 // DOM Elements
 const brokerUrlInput = document.getElementById('broker-url');
 const connectBtn = document.getElementById('connect-btn');
+const clearBrokerBtn = document.getElementById('clear-broker-btn');
 const connectionStatus = document.getElementById('connection-status');
 const refreshBtn = document.getElementById('refresh-btn');
 const newSensorBtn = document.getElementById('new-sensor-btn');
@@ -24,11 +25,64 @@ const newSensorStateTopicInput = document.getElementById('new-sensor-state-topic
 const newSensorConfigJsonInput = document.getElementById('new-sensor-config-json');
 const createSensorBtn = document.getElementById('create-sensor-btn');
 
-// Check connection status on page load
-checkConnectionStatus();
+// Helper functions for cookies
+function setCookie(name, value, days) {
+  let expires = '';
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = '; expires=' + date.toUTCString();
+  }
+  document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/';
+}
+
+function getCookie(name) {
+  const nameEQ = name + '=';
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+  }
+  return null;
+}
+
+// Set broker URL from cookie if available
+const savedBrokerUrl = getCookie('mqtt_broker_url');
+if (savedBrokerUrl) {
+  brokerUrlInput.value = savedBrokerUrl;
+}
+
+// Check connection status on page load and attempt auto-connect
+async function initializeApp() {
+  await checkConnectionStatus();
+  
+  // If we're not connected yet but have a saved broker URL, try connecting
+  if (connectionStatus.textContent === 'Disconnected' && savedBrokerUrl) {
+    console.log('Auto-connecting to saved broker URL...');
+    connectToBroker();
+  }
+}
+
+initializeApp();
+
+// Helper function to clear cookie
+function clearCookie(name) {
+  document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+}
+
+// Function to clear broker URL
+function clearBrokerUrl() {
+  if (confirm('Are you sure you want to clear the saved broker URL?')) {
+    clearCookie('mqtt_broker_url');
+    brokerUrlInput.value = '';
+    alert('Saved broker URL has been cleared.');
+  }
+}
 
 // Event Listeners
 connectBtn.addEventListener('click', connectToBroker);
+clearBrokerBtn.addEventListener('click', clearBrokerUrl);
 refreshBtn.addEventListener('click', loadSensors);
 newSensorBtn.addEventListener('click', openNewSensorModal);
 saveSensorBtn.addEventListener('click', saveSensor);
@@ -45,10 +99,20 @@ async function checkConnectionStatus() {
     
     if (data.broker) {
       brokerUrlInput.value = data.broker;
+      // Update cookie to match current broker
+      setCookie('mqtt_broker_url', data.broker, 30);
     }
     
     if (data.connected) {
       loadSensors();
+    } else {
+      // If not connected but we have a saved broker URL, attempt to connect
+      const savedBrokerUrl = getCookie('mqtt_broker_url');
+      if (savedBrokerUrl && !data.connected && savedBrokerUrl !== data.broker) {
+        console.log('Attempting to connect with saved broker URL:', savedBrokerUrl);
+        brokerUrlInput.value = savedBrokerUrl;
+        await connectToBroker();
+      }
     }
   } catch (err) {
     console.error('Error checking connection status:', err);
@@ -78,6 +142,9 @@ async function connectToBroker() {
     const data = await response.json();
     
     if (data.success) {
+      // Save broker URL to cookie that expires in 30 days
+      setCookie('mqtt_broker_url', broker, 30);
+      
       // Wait a bit for connection to establish
       setTimeout(checkConnectionStatus, 1000);
     } else {

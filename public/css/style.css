@@ -23,6 +23,16 @@ body {
   margin-right: 5px;
 }
 
+#clear-broker-btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+#connect-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 /* Modal styles */
 #sensor-config-json {
   font-family: monospace;
