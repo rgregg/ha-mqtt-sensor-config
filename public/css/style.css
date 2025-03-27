@@ -12,6 +12,39 @@ body {
 /* Table styles */
 .table th {
   background-color: #f1f1f1;
+  position: relative;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable:hover {
+  background-color: #e5e5e5;
+}
+
+.sort-icon {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  margin-left: 5px;
+}
+
+.sort-asc .sort-icon {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+.sort-desc .sort-icon {
+  opacity: 1;
+  transform: rotate(0deg);
+}
+
+.actions-column {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  text-align: center;
 }
 
 /* Button styles */

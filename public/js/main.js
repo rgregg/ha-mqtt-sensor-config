@@ -53,8 +53,30 @@ if (savedBrokerUrl) {
   brokerUrlInput.value = savedBrokerUrl;
 }
 
+// Function to handle column header clicks for sorting
+function handleSortClick(e) {
+  const clickedColumn = e.currentTarget.dataset.sort;
+  
+  // If clicking the same column, toggle direction
+  if (clickedColumn === currentSortColumn) {
+    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    // New column, default to ascending
+    currentSortColumn = clickedColumn;
+    currentSortDirection = 'asc';
+  }
+  
+  // Re-display with new sort settings
+  displaySensors();
+}
+
 // Check connection status on page load and attempt auto-connect
 async function initializeApp() {
+  // Add click handlers to sortable columns
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', handleSortClick);
+  });
+  
   await checkConnectionStatus();
   
   // If we're not connected yet but have a saved broker URL, try connecting
@@ -146,7 +168,10 @@ async function connectToBroker() {
       setCookie('mqtt_broker_url', broker, 30);
       
       // Wait a bit for connection to establish
-      setTimeout(checkConnectionStatus, 1000);
+      setTimeout(async () => {
+        await checkConnectionStatus();
+        displaySensors(); // Make sure sorted display is up to date
+      }, 1000);
     } else {
       updateConnectionStatus(false);
       alert(`Connection failed: ${data.error}`);
@@ -168,42 +193,17 @@ function updateConnectionStatus(connected) {
   }
 }
 
+// Global variable to store all sensors for sorting
+let allSensors = [];
+let currentSortColumn = 'id';
+let currentSortDirection = 'asc';
+
 async function loadSensors() {
   try {
     const response = await fetch('/sensors');
-    const sensors = await response.json();
+    allSensors = await response.json();
     
-    sensorsTableBody.innerHTML = '';
-    
-    if (sensors.length === 0) {
-      sensorsTableBody.innerHTML = `
-        <tr>
-          <td colspan="5" class="text-center">No sensors discovered yet</td>
-        </tr>
-      `;
-      return;
-    }
-    
-    sensors.forEach(sensor => {
-      const row = document.createElement('tr');
-      
-      row.innerHTML = `
-        <td>${sensor.deviceId}</td>
-        <td>${sensor.config.name || 'Unnamed'}</td>
-        <td>${sensor.deviceType}</td>
-        <td>${sensor.config.state_topic || 'N/A'}</td>
-        <td>
-          <button class="btn btn-sm btn-primary btn-action edit-btn" data-id="${sensor.id}">Edit</button>
-        </td>
-      `;
-      
-      sensorsTableBody.appendChild(row);
-    });
-    
-    // Add event listeners to edit buttons
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => openEditModal(btn.dataset.id));
-    });
+    displaySensors();
   } catch (err) {
     console.error('Error loading sensors:', err);
     sensorsTableBody.innerHTML = `
@@ -211,6 +211,99 @@ async function loadSensors() {
         <td colspan="5" class="text-center text-danger">Error loading sensors. Check console for details.</td>
       </tr>
     `;
+  }
+}
+
+function displaySensors() {
+  sensorsTableBody.innerHTML = '';
+  
+  if (allSensors.length === 0) {
+    sensorsTableBody.innerHTML = `
+      <tr>
+        <td colspan="5" class="text-center">No sensors discovered yet</td>
+      </tr>
+    `;
+    return;
+  }
+  
+  // Sort the sensors based on current sort settings
+  sortSensors();
+  
+  allSensors.forEach(sensor => {
+    const row = document.createElement('tr');
+    
+    row.innerHTML = `
+      <td class="text-center">
+        <button class="btn btn-sm btn-primary btn-action edit-btn" data-id="${sensor.id}">
+          <i class="bi bi-pencil"></i> Edit
+        </button>
+      </td>
+      <td>${sensor.deviceId}</td>
+      <td>${sensor.config.name || 'Unnamed'}</td>
+      <td>${sensor.deviceType}</td>
+      <td>${sensor.config.state_topic || 'N/A'}</td>
+    `;
+    
+    sensorsTableBody.appendChild(row);
+  });
+  
+  // Add event listeners to edit buttons
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => openEditModal(btn.dataset.id));
+  });
+  
+  // Update column header styling
+  updateSortIndicators();
+}
+
+function sortSensors() {
+  allSensors.sort((a, b) => {
+    let valA, valB;
+    
+    switch (currentSortColumn) {
+      case 'id':
+        valA = a.deviceId;
+        valB = b.deviceId;
+        break;
+      case 'name':
+        valA = a.config.name || '';
+        valB = b.config.name || '';
+        break;
+      case 'type':
+        valA = a.deviceType;
+        valB = b.deviceType;
+        break;
+      case 'topic':
+        valA = a.config.state_topic || '';
+        valB = b.config.state_topic || '';
+        break;
+      default:
+        valA = a.deviceId;
+        valB = b.deviceId;
+    }
+    
+    // Case-insensitive string comparison
+    valA = valA.toString().toLowerCase();
+    valB = valB.toString().toLowerCase();
+    
+    if (currentSortDirection === 'asc') {
+      return valA.localeCompare(valB);
+    } else {
+      return valB.localeCompare(valA);
+    }
+  });
+}
+
+function updateSortIndicators() {
+  // Reset all headers
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+  });
+  
+  // Set current sort header
+  const currentHeader = document.querySelector(`th[data-sort="${currentSortColumn}"]`);
+  if (currentHeader) {
+    currentHeader.classList.add(currentSortDirection === 'asc' ? 'sort-asc' : 'sort-desc');
   }
 }
 
@@ -316,7 +409,8 @@ async function saveSensor() {
       if (response.status === 404) {
         alert('Sensor not found. It may have been deleted or the server was restarted. Try refreshing the page.');
         editSensorModal.hide();
-        loadSensors(); // Refresh the list
+        await loadSensors(); // Refresh the list
+        displaySensors();
         return;
       } else if (response.status === 400) {
         alert('Not connected to MQTT broker. Please connect first.');
@@ -331,7 +425,8 @@ async function saveSensor() {
     
     if (data.success) {
       editSensorModal.hide();
-      loadSensors(); // Refresh sensors list
+      await loadSensors(); // Refresh sensors list
+      displaySensors();
       alert('Sensor updated successfully!');
     } else {
       alert(`Failed to update sensor: ${data.error}`);
@@ -358,7 +453,9 @@ async function deleteSensor() {
     
     if (data.success) {
       editSensorModal.hide();
-      loadSensors(); // Refresh sensors list
+      await loadSensors(); // Refresh sensors list
+      displaySensors();
+      alert('Sensor deleted successfully');
     } else {
       alert(`Failed to delete sensor: ${data.error}`);
     }
@@ -429,7 +526,15 @@ async function createSensor() {
     
     if (data.success) {
       newSensorModal.hide();
-      loadSensors(); // Refresh sensors list
+      await loadSensors(); // Refresh sensors list
+      
+      // If the new sensor was successfully created, make it show at the top
+      // by sorting by ID and setting ascending order
+      currentSortColumn = 'id';
+      currentSortDirection = 'asc';
+      displaySensors();
+      
+      alert('Sensor created successfully!');
     } else {
       alert(`Failed to create sensor: ${data.error}`);
     }
