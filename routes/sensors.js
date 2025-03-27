@@ -168,12 +168,12 @@ router.post('/', (req, res) => {
     // Create discovery topic for this sensor
     const topic = `homeassistant/${deviceType}/${deviceId}/config`;
     
-    // Publish config to MQTT broker with QoS 1 to ensure delivery
-    client.publish(topic, JSON.stringify(config), { qos: 1 }, (err) => {
+    // Publish config to MQTT broker with QoS 1 and retain flag to ensure delivery and persistence
+    client.publish(topic, JSON.stringify(config), { qos: 1, retain: true }, (err) => {
       if (err) {
         console.error('Error publishing to MQTT:', err);
       } else {
-        console.log('Successfully published to MQTT with QoS 1');
+        console.log('Successfully published to MQTT with QoS 1 and retain flag');
       }
     });
     
@@ -228,12 +228,12 @@ router.put('/:id', (req, res) => {
     console.log('Updated config:', updatedConfig);
     console.log('Publishing to topic:', sensor.topic);
     
-    // Publish updated config with QoS 1 to ensure delivery
-    client.publish(sensor.topic, JSON.stringify(updatedConfig), { qos: 1 }, (err) => {
+    // Publish updated config with QoS 1 and retain flag to ensure delivery and persistence
+    client.publish(sensor.topic, JSON.stringify(updatedConfig), { qos: 1, retain: true }, (err) => {
       if (err) {
         console.error('Error publishing to MQTT:', err);
       } else {
-        console.log('Successfully published to MQTT with QoS 1');
+        console.log('Successfully published to MQTT with QoS 1 and retain flag');
       }
     });
     
@@ -261,12 +261,12 @@ router.delete('/:id', (req, res) => {
   }
   
   try {
-    // Publish empty config to remove sensor with QoS 1
-    client.publish(sensor.topic, '', { qos: 1 }, (err) => {
+    // Publish empty config to remove sensor - using retain flag with empty payload clears the retained message
+    client.publish(sensor.topic, '', { qos: 1, retain: true }, (err) => {
       if (err) {
         console.error('Error publishing delete to MQTT:', err);
       } else {
-        console.log('Successfully published delete to MQTT with QoS 1');
+        console.log('Successfully cleared retained message with QoS 1');
       }
     });
     
