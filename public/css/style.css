@@ -1,0 +1,26 @@
+/* Main styles */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
+}
+
+.connection-status {
+  text-align: right;
+  padding: 6px 0;
+}
+
+/* Table styles */
+.table th {
+  background-color: #f1f1f1;
+}
+
+/* Button styles */
+.btn-action {
+  margin-right: 5px;
+}
+
+/* Modal styles */
+#sensor-config-json {
+  font-family: monospace;
+  font-size: 0.9rem;
+}
