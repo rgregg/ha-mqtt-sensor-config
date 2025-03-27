@@ -18,12 +18,16 @@ const deleteSensorBtn = document.getElementById('delete-sensor-btn');
 
 // New Sensor Modal Elements
 const newSensorModal = new bootstrap.Modal(document.getElementById('new-sensor-modal'));
+const newTopicFormatSelect = document.getElementById('new-topic-format');
 const newSensorTypeSelect = document.getElementById('new-sensor-type');
 const newSensorIdInput = document.getElementById('new-sensor-id');
+const newSensorNamePartInput = document.getElementById('new-sensor-name-part');
 const newSensorNameInput = document.getElementById('new-sensor-name');
 const newSensorStateTopicInput = document.getElementById('new-sensor-state-topic');
 const newSensorConfigJsonInput = document.getElementById('new-sensor-config-json');
 const createSensorBtn = document.getElementById('create-sensor-btn');
+const deviceTypeGroup = document.querySelector('.device-type-group');
+const sensorNameGroup = document.querySelector('.sensor-name-group');
 
 // Helper functions for cookies
 function setCookie(name, value, days) {
@@ -102,6 +106,31 @@ function clearBrokerUrl() {
   }
 }
 
+// Function to handle topic format changes
+function updateTopicFormatUI() {
+  const format = newTopicFormatSelect.value;
+  
+  // Show/hide fields based on selected format
+  switch(format) {
+    case 'standard':
+      deviceTypeGroup.style.display = 'block';
+      sensorNameGroup.style.display = 'none';
+      break;
+    case 'standard_with_name':
+      deviceTypeGroup.style.display = 'block';
+      sensorNameGroup.style.display = 'block';
+      break;
+    case 'unique_id':
+      deviceTypeGroup.style.display = 'none';
+      sensorNameGroup.style.display = 'none';
+      break;
+    case 'unique_id_with_name':
+      deviceTypeGroup.style.display = 'none';
+      sensorNameGroup.style.display = 'block';
+      break;
+  }
+}
+
 // Event Listeners
 connectBtn.addEventListener('click', connectToBroker);
 clearBrokerBtn.addEventListener('click', clearBrokerUrl);
@@ -110,6 +139,7 @@ newSensorBtn.addEventListener('click', openNewSensorModal);
 saveSensorBtn.addEventListener('click', saveSensor);
 deleteSensorBtn.addEventListener('click', deleteSensor);
 createSensorBtn.addEventListener('click', createSensor);
+newTopicFormatSelect.addEventListener('change', updateTopicFormatUI);
 
 // Functions
 async function checkConnectionStatus() {
@@ -232,16 +262,31 @@ function displaySensors() {
   allSensors.forEach(sensor => {
     const row = document.createElement('tr');
     
+    // Extract topic format information
+    const topicParts = sensor.topic.split('/');
+    let topicFormat = 'Unknown';
+    
+    if (topicParts.length === 4 && topicParts[3] === 'config') {
+      topicFormat = 'Standard';
+    } else if (topicParts.length === 5 && topicParts[4] === 'config') {
+      topicFormat = 'With Name';
+    } else if (topicParts.length === 3 && topicParts[2] === 'config') {
+      topicFormat = 'Direct';
+    }
+    
+    // Create a tooltip with full topic
+    const tooltipAttr = `data-bs-toggle="tooltip" data-bs-placement="top" title="${sensor.topic}"`;
+    
     row.innerHTML = `
       <td class="text-center">
         <button class="btn btn-sm btn-primary btn-action edit-btn" data-id="${sensor.id}">
           <i class="bi bi-pencil"></i> Edit
         </button>
       </td>
-      <td>${sensor.deviceId}</td>
+      <td>${sensor.deviceId || 'N/A'}</td>
       <td>${sensor.config.name || 'Unnamed'}</td>
-      <td>${sensor.deviceType}</td>
-      <td>${sensor.config.state_topic || 'N/A'}</td>
+      <td>${sensor.deviceType || 'custom'}</td>
+      <td ${tooltipAttr}>${sensor.config.state_topic || 'N/A'}</td>
     `;
     
     sensorsTableBody.appendChild(row);
@@ -250,6 +295,12 @@ function displaySensors() {
   // Add event listeners to edit buttons
   document.querySelectorAll('.edit-btn').forEach(btn => {
     btn.addEventListener('click', () => openEditModal(btn.dataset.id));
+  });
+  
+  // Initialize tooltips
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
   });
   
   // Update column header styling
@@ -467,25 +518,53 @@ async function deleteSensor() {
 
 function openNewSensorModal() {
   // Clear form
+  newTopicFormatSelect.value = 'standard';
   newSensorTypeSelect.value = 'sensor';
   newSensorIdInput.value = '';
+  newSensorNamePartInput.value = '';
   newSensorNameInput.value = '';
   newSensorStateTopicInput.value = '';
   newSensorConfigJsonInput.value = '';
+  
+  // Initialize UI based on selected format
+  updateTopicFormatUI();
   
   // Show modal
   newSensorModal.show();
 }
 
 async function createSensor() {
-  // Validate input
-  const deviceType = newSensorTypeSelect.value;
+  // Get the topic format
+  const topicFormat = newTopicFormatSelect.value;
+  
+  // Get common required fields
   const deviceId = newSensorIdInput.value.trim();
-  const name = newSensorNameInput.value.trim();
+  const displayName = newSensorNameInput.value.trim();
   const stateTopic = newSensorStateTopicInput.value.trim();
   
-  if (!deviceId || !name || !stateTopic) {
+  // Get format-specific fields
+  const deviceType = (topicFormat === 'standard' || topicFormat === 'standard_with_name') 
+    ? newSensorTypeSelect.value 
+    : null;
+    
+  const sensorName = (topicFormat === 'standard_with_name' || topicFormat === 'unique_id_with_name') 
+    ? newSensorNamePartInput.value.trim() 
+    : null;
+  
+  // Validate common required fields
+  if (!deviceId || !displayName || !stateTopic) {
     alert('Please fill in all required fields');
+    return;
+  }
+  
+  // Validate format-specific fields
+  if ((topicFormat === 'standard' || topicFormat === 'standard_with_name') && !deviceType) {
+    alert('Device Type is required for standard format');
+    return;
+  }
+  
+  if ((topicFormat === 'standard_with_name' || topicFormat === 'unique_id_with_name') && !sensorName) {
+    alert('Sensor Name Part is required for formats with sensor name');
     return;
   }
   
@@ -503,7 +582,7 @@ async function createSensor() {
     
     // Create full config object
     const config = {
-      name,
+      name: displayName,
       state_topic: stateTopic,
       unique_id: deviceId,
       ...additionalConfig
@@ -518,7 +597,9 @@ async function createSensor() {
       body: JSON.stringify({
         deviceType,
         deviceId,
-        config
+        sensorName,
+        config,
+        topicFormat
       })
     });
     

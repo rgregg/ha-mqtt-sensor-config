@@ -113,8 +113,19 @@
           </div>
           <div class="modal-body">
             <form id="new-sensor-form">
+              <div class="mb-3">
+                <label for="new-topic-format" class="form-label">Topic Format</label>
+                <select class="form-select" id="new-topic-format">
+                  <option value="standard">Standard: homeassistant/{device_type}/{device_id}/config</option>
+                  <option value="standard_with_name">Standard with name: homeassistant/{device_type}/{device_id}/{sensor_name}/config</option>
+                  <option value="unique_id">Simple: homeassistant/{unique_id}/config</option>
+                  <option value="unique_id_with_name">With name: homeassistant/{unique_id}/{sensor_name}/config</option>
+                </select>
+                <small class="form-text text-muted">Select the format of the MQTT topic for this sensor</small>
+              </div>
+              
               <div class="row mb-3">
-                <div class="col-md-6">
+                <div class="col-md-6 device-type-group">
                   <label for="new-sensor-type" class="form-label">Device Type</label>
                   <select class="form-select" id="new-sensor-type">
                     <option value="sensor">sensor</option>
@@ -123,12 +134,19 @@
                     <option value="light">light</option>
                     <option value="climate">climate</option>
                     <option value="cover">cover</option>
+                    <option value="custom">custom</option>
                   </select>
                 </div>
                 <div class="col-md-6">
-                  <label for="new-sensor-id" class="form-label">Device ID</label>
+                  <label for="new-sensor-id" class="form-label">Device/Unique ID</label>
                   <input type="text" class="form-control" id="new-sensor-id" placeholder="unique_identifier">
                 </div>
+              </div>
+              
+              <div class="mb-3 sensor-name-group" style="display:none;">
+                <label for="new-sensor-name-part" class="form-label">Sensor Name Part (for topic)</label>
+                <input type="text" class="form-control" id="new-sensor-name-part" placeholder="sensor_name_in_topic">
+                <small class="form-text text-muted">This is the name part used in the MQTT topic path</small>
               </div>
               <div class="mb-3">
                 <label for="new-sensor-name" class="form-label">Sensor Name</label>

@@ -26,21 +26,22 @@ function connectMQTT(url) {
     mqttConnected = true;
     console.log('Connected to MQTT broker');
     
-    // Subscribe to Home Assistant discovery topics
-    client.subscribe('homeassistant/+/+/config', { qos: 1 }, (err) => {
-      if (err) {
-        console.error('Error subscribing to topics:', err);
-      } else {
-        console.log('Subscribed to homeassistant/+/+/config');
-      }
-    });
+    // Subscribe to all possible Home Assistant discovery topic formats
+    const topicPatterns = [
+      'homeassistant/+/+/config',         // Standard format: homeassistant/{device_type}/{device_id}/config
+      'homeassistant/+/+/+/config',       // With sensor name: homeassistant/{device_type}/{device_id}/{sensor_name}/config
+      'homeassistant/+/config',           // Direct format: homeassistant/{unique_id}/config
+      'homeassistant/+/+/state'           // State topics for monitoring
+    ];
     
-    client.subscribe('homeassistant/+/+/+/config', { qos: 1 }, (err) => {
-      if (err) {
-        console.error('Error subscribing to topics:', err);
-      } else {
-        console.log('Subscribed to homeassistant/+/+/+/config');
-      }
+    topicPatterns.forEach(pattern => {
+      client.subscribe(pattern, { qos: 1 }, (err) => {
+        if (err) {
+          console.error(`Error subscribing to ${pattern}:`, err);
+        } else {
+          console.log(`Subscribed to ${pattern}`);
+        }
+      });
     });
   });
   
@@ -75,6 +76,13 @@ function setupMessageHandler() {
   if (client) {
     client.on('message', (topic, message) => {
       console.log('Received message:', topic, message.toString());
+      
+      // Skip state topics for now
+      if (topic.endsWith('/state')) {
+        return;
+      }
+      
+      // Only process config topics
       if (topic.includes('homeassistant') && topic.includes('/config')) {
         try {
           if (message.toString().trim() === '') {
@@ -84,23 +92,61 @@ function setupMessageHandler() {
           
           const config = JSON.parse(message.toString());
           const topicParts = topic.split('/');
-          var deviceType, deviceId, sensorName;
+          let deviceType, deviceId, sensorName, sensorId;
           
-          if (topicParts.length == 4) {
-            deviceType = topicParts[1]; // sensor, binary_sensor, etc.
-            deviceId = topicParts[2];   // unique_id part
-          } else if (topicParts.length == 5) {
-            deviceType = topicParts[1]; // sensor, binary_sensor, etc.
-            deviceId = topicParts[2];   // unique_id part
-            sensorName = topicParts[3]; // name part
+          // Determine the format based on topic structure
+          // Format: homeassistant/{device_type}/{device_id}/config
+          if (topicParts.length === 4 && topicParts[0] === 'homeassistant' && topicParts[3] === 'config') {
+            deviceType = topicParts[1];
+            deviceId = topicParts[2];
+            sensorId = `${deviceType}_${deviceId}`;
+          } 
+          // Format: homeassistant/{device_type}/{device_id}/{sensor_name}/config
+          else if (topicParts.length === 5 && topicParts[0] === 'homeassistant' && topicParts[4] === 'config') {
+            deviceType = topicParts[1];
+            deviceId = topicParts[2];
+            sensorName = topicParts[3];
+            sensorId = `${deviceType}_${deviceId}_${sensorName}`;
+          }
+          // Format: homeassistant/{unique_id}/config
+          else if (topicParts.length === 3 && topicParts[0] === 'homeassistant' && topicParts[2] === 'config') {
+            // For this format, use the unique_id directly
+            deviceType = 'custom'; // Default type for this format
+            deviceId = topicParts[1];
+            sensorId = deviceId;
+            
+            // If the config has a device_class, use it as the device type
+            if (config.device_class) {
+              deviceType = config.device_class;
+              sensorId = `${deviceType}_${deviceId}`;
+            }
+          } else {
+            console.log('Unrecognized topic format:', topic);
+            return;
           }
           
-          const sensorId = `${deviceType}_${deviceId}`;
+          // Try to get a better device type from the config if not available
+          if (!deviceType || deviceType === 'custom') {
+            if (config.device_class) {
+              deviceType = config.device_class;
+            } else if (config.state_topic && config.state_topic.includes('/')) {
+              // Try to infer from state topic
+              const stateTopicParts = config.state_topic.split('/');
+              if (stateTopicParts.length > 1) {
+                const potentialType = stateTopicParts[stateTopicParts.length - 2];
+                if (['sensor', 'binary_sensor', 'switch', 'light', 'climate', 'cover'].includes(potentialType)) {
+                  deviceType = potentialType;
+                }
+              }
+            }
+          }
+          
           console.log(`Adding/updating sensor ${sensorId} to discoveredSensors`);
           
+          // Store the sensor info
           discoveredSensors[sensorId] = {
             id: sensorId,
-            deviceType,
+            deviceType: deviceType || 'custom',
             deviceId,
             config,
             topic,
@@ -149,10 +195,10 @@ router.post('/', (req, res) => {
   }
   
   try {
-    const { deviceType, deviceId, config } = req.body;
+    const { deviceType, deviceId, sensorName, config, topicFormat } = req.body;
     
-    if (!deviceType || !deviceId || !config) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!deviceId || !config) {
+      return res.status(400).json({ error: 'Missing required fields: deviceId and config are required' });
     }
 
     // Ensure required fields exist in config
@@ -165,8 +211,44 @@ router.post('/', (req, res) => {
       config.unique_id = deviceId;
     }
     
-    // Create discovery topic for this sensor
-    const topic = `homeassistant/${deviceType}/${deviceId}/config`;
+    // Determine the topic based on the requested format
+    let topic;
+    let sensorId;
+    
+    switch (topicFormat) {
+      case 'unique_id':
+        // Format: homeassistant/{unique_id}/config
+        topic = `homeassistant/${deviceId}/config`;
+        sensorId = deviceId;
+        break;
+        
+      case 'unique_id_with_name':
+        // Format: homeassistant/{unique_id}/{sensor_name}/config
+        if (!sensorName) {
+          return res.status(400).json({ error: 'sensorName is required for unique_id_with_name format' });
+        }
+        topic = `homeassistant/${deviceId}/${sensorName}/config`;
+        sensorId = `${deviceId}_${sensorName}`;
+        break;
+        
+      case 'standard':
+      default:
+        // Format: homeassistant/{device_type}/{device_id}/config
+        if (!deviceType) {
+          return res.status(400).json({ error: 'deviceType is required for standard format' });
+        }
+        topic = `homeassistant/${deviceType}/${deviceId}/config`;
+        sensorId = `${deviceType}_${deviceId}`;
+        
+        // If sensor name is provided, use it in the topic
+        if (sensorName) {
+          topic = `homeassistant/${deviceType}/${deviceId}/${sensorName}/config`;
+          sensorId = `${deviceType}_${deviceId}_${sensorName}`;
+        }
+        break;
+    }
+    
+    console.log(`Creating sensor with topic: ${topic}`);
     
     // Publish config to MQTT broker with QoS 1 and retain flag to ensure delivery and persistence
     client.publish(topic, JSON.stringify(config), { qos: 1, retain: true }, (err) => {
@@ -178,15 +260,16 @@ router.post('/', (req, res) => {
     });
     
     // Add to local cache
-    const id = `${deviceType}_${deviceId}`;
+    const actualDeviceType = deviceType || (config.device_class || 'custom');
     const sensor = {
-      id,
-      deviceType,
+      id: sensorId,
+      deviceType: actualDeviceType,
       deviceId,
+      sensorName,
       config,
       topic
     };
-    discoveredSensors[id] = sensor;
+    discoveredSensors[sensorId] = sensor;
     
     res.status(201).json({ success: true, sensor });
   } catch (err) {
