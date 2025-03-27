@@ -10,6 +10,11 @@ const sensorsTableBody = document.getElementById('sensors-table-body');
 // Edit Modal Elements
 const editSensorModal = new bootstrap.Modal(document.getElementById('edit-sensor-modal'));
 const sensorIdInput = document.getElementById('sensor-id');
+const sensorTopicInput = document.getElementById('sensor-topic');
+const sensorDeviceTypeInput = document.getElementById('sensor-device-type');
+const sensorDeviceIdInput = document.getElementById('sensor-device-id');
+const sensorNamePartInput = document.getElementById('sensor-name-part');
+const sensorNamePartGroup = document.getElementById('sensor-name-part-group');
 const sensorNameInput = document.getElementById('sensor-name');
 const sensorStateTopicInput = document.getElementById('sensor-state-topic');
 const sensorConfigJsonInput = document.getElementById('sensor-config-json');
@@ -368,7 +373,8 @@ async function openEditModal(sensorId) {
     if (!response.ok) {
       if (response.status === 404) {
         alert('Sensor not found. It may have been deleted or the server was restarted. Try refreshing the page.');
-        loadSensors(); // Refresh the list to show current state
+        await loadSensors(); // Refresh the list to show current state
+        displaySensors(); // Make sure to update the display
         return;
       }
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -384,6 +390,24 @@ async function openEditModal(sensorId) {
     
     // Populate form fields
     sensorIdInput.value = sensor.id;
+    sensorTopicInput.value = sensor.topic || '';
+    sensorDeviceTypeInput.value = sensor.deviceType || 'custom';
+    sensorDeviceIdInput.value = sensor.deviceId || '';
+    
+    // Determine if this is a topic with a sensor name part
+    const topicParts = sensor.topic.split('/');
+    const hasSensorNamePart = (topicParts.length === 5 && topicParts[4] === 'config') || 
+                             (topicParts.length === 4 && topicParts[0] === 'homeassistant' && 
+                              topicParts[3] === 'config' && topicParts[1] !== sensor.deviceType);
+    
+    if (hasSensorNamePart && sensor.sensorName) {
+      sensorNamePartGroup.style.display = 'block';
+      sensorNamePartInput.value = sensor.sensorName;
+    } else {
+      sensorNamePartGroup.style.display = 'none';
+      sensorNamePartInput.value = '';
+    }
+    
     sensorNameInput.value = sensor.config.name || '';
     sensorStateTopicInput.value = sensor.config.state_topic || '';
     sensorConfigJsonInput.value = JSON.stringify(sensor.config, null, 2);

@@ -80,14 +80,41 @@
           <div class="modal-body">
             <form id="edit-sensor-form">
               <input type="hidden" id="sensor-id">
+              
               <div class="mb-3">
-                <label for="sensor-name" class="form-label">Name</label>
-                <input type="text" class="form-control" id="sensor-name">
+                <label class="form-label">MQTT Topic</label>
+                <input type="text" class="form-control" id="sensor-topic" readonly>
+                <small class="form-text text-muted">The MQTT topic where this sensor's config is published</small>
               </div>
+              
+              <div class="row mb-3">
+                <div class="col-md-6">
+                  <label for="sensor-device-type" class="form-label">Device Type</label>
+                  <input type="text" class="form-control" id="sensor-device-type" readonly>
+                </div>
+                <div class="col-md-6">
+                  <label for="sensor-device-id" class="form-label">Device/Unique ID</label>
+                  <input type="text" class="form-control" id="sensor-device-id" readonly>
+                </div>
+              </div>
+              
+              <div class="mb-3" id="sensor-name-part-group">
+                <label for="sensor-name-part" class="form-label">Sensor Name in Topic</label>
+                <input type="text" class="form-control" id="sensor-name-part" readonly>
+                <small class="form-text text-muted">This is the name used in the MQTT topic path</small>
+              </div>
+              
+              <div class="mb-3">
+                <label for="sensor-name" class="form-label">Display Name</label>
+                <input type="text" class="form-control" id="sensor-name">
+                <small class="form-text text-muted">The name that will be shown in Home Assistant</small>
+              </div>
+              
               <div class="mb-3">
                 <label for="sensor-state-topic" class="form-label">State Topic</label>
                 <input type="text" class="form-control" id="sensor-state-topic">
               </div>
+              
               <div class="mb-3">
                 <label for="sensor-config-json" class="form-label">Configuration JSON</label>
                 <textarea class="form-control" id="sensor-config-json" rows="10"></textarea>
